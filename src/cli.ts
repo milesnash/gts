@@ -21,7 +21,7 @@ import * as meow from 'meow';
 import {init} from './init';
 import {clean} from './clean';
 import {isYarnUsed} from './util';
-import * as execa from 'execa';
+import {ESLint} from 'eslint';
 
 export interface Logger {
   log: (...args: Array<{}>) => void;
@@ -127,38 +127,41 @@ export async function run(verb: string, files: string[]): Promise<boolean> {
   }
 
   const flags = Object.assign([], files);
+  let errorOnUnmatchedPattern = true;
   if (flags.length === 0) {
-    flags.push(
-      '**/*.ts',
-      '**/*.js',
-      '**/*.tsx',
-      '**/*.jsx',
-      '--no-error-on-unmatched-pattern'
-    );
+    flags.push('**/*.ts', '**/*.js', '**/*.tsx', '**/*.jsx');
+    errorOnUnmatchedPattern = false;
   }
 
   switch (verb) {
     case 'lint':
     case 'check': {
       try {
-        await execa('node', ['./node_modules/eslint/bin/eslint', ...flags], {
-          stdio: 'inherit',
-        });
+        const eslint = new ESLint({errorOnUnmatchedPattern});
+        const results = await eslint.lintFiles(flags);
+
+        if (results.length) {
+          const formatter = await eslint.loadFormatter('stylish');
+          const resultText = formatter.format(results);
+          console.error(resultText);
+          return false;
+        }
+
         return true;
       } catch (e) {
         return false;
       }
     }
     case 'fix': {
-      const fixFlag = options.dryRun ? '--fix-dry-run' : '--fix';
+      const fix = !options.dryRun;
       try {
-        await execa(
-          'node',
-          ['./node_modules/eslint/bin/eslint', fixFlag, ...flags],
-          {
-            stdio: 'inherit',
-          }
-        );
+        const eslint = new ESLint({errorOnUnmatchedPattern, fix});
+        const results = await eslint.lintFiles(flags);
+
+        if (fix) {
+          await ESLint.outputFixes(results);
+        }
+
         return true;
       } catch (e) {
         console.error(e);
