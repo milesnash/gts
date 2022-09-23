@@ -141,10 +141,22 @@ export async function run(verb: string, files: string[]): Promise<boolean> {
         const results = await eslint.lintFiles(flags);
 
         if (results.length) {
+          const {errorCount, warningCount} = results.reduce(
+            (
+              {errorCount: accE, warningCount: accW},
+              {errorCount: currE, warningCount: currW}
+            ) => {
+              return {
+                errorCount: accE + currE,
+                warningCount: accW + currW,
+              };
+            },
+            {errorCount: 0, warningCount: 0}
+          );
           const formatter = await eslint.loadFormatter('stylish');
           const resultText = formatter.format(results);
-          console.error(resultText);
-          return false;
+          if (errorCount || warningCount) console.log(resultText);
+          return !errorCount;
         }
 
         return true;

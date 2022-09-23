@@ -1,5 +1,6 @@
 import chalk = require('chalk');
 import * as cp from 'child_process';
+import * as util from 'util';
 import * as fs from 'fs-extra';
 import * as tmp from 'tmp';
 import * as assert from 'assert';
@@ -7,7 +8,6 @@ import * as path from 'path';
 import {describe, it, before, after} from 'mocha';
 
 import spawn = require('cross-spawn');
-import execa = require('execa');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const pkg = require('../../package.json');
 const keep = !!process.env.GTS_KEEP_TEMPDIRS;
@@ -136,13 +136,22 @@ describe('🚰 kitchen sink', () => {
   });
 
   it('should lint before fix', async () => {
-    const res = await execa(
-      'npm',
-      ['run', 'lint'],
-      Object.assign({}, {reject: false}, execOpts)
-    );
-    assert.strictEqual(res.exitCode, 1);
-    assert.ok(res.stdout.includes('assigned a value but'));
+    const exec = util.promisify(cp.exec);
+    let code: number | null = null;
+    let stdout = '';
+
+    try {
+      await exec('npm run lint', Object.assign({}, {reject: false}, execOpts));
+    } catch (e) {
+      ({code, stdout} = e as {
+        code: number;
+        stdout: string;
+        stderr: string;
+      });
+    }
+
+    assert.strictEqual(code, 1);
+    assert.ok(stdout.includes('assigned a value but'));
   });
 
   it('should fix', () => {
